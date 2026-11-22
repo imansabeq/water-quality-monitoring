@@ -7,7 +7,7 @@ A university IoT project that monitors water quality (pH, turbidity, TDS, chlori
 
 
 
-                                 <img width="2389" height="1415" alt="demo" src="https://github.com/user-attachments/assets/de1263fb-0db6-49af-bb7b-fc04d6b4861b" />
+<img width="2389" height="1415" alt="demo" src="https://github.com/user-attachments/assets/de1263fb-0db6-49af-bb7b-fc04d6b4861b" />
 
 ## Why this project
 
