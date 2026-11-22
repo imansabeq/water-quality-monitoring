@@ -1,135 +1,208 @@
-# Water Quality Monitoring (IoT): Arduino + ESP8266, simulated in Proteus and Cisco Packet Tracer
+# 💧 Water Quality Monitoring System (IoT)
 
-A university IoT project that monitors water quality (pH, turbidity, TDS, chlorine), decides whether the water is safe, and sends the readings toward a server. The hardware side is simulated in **Proteus** (Arduino UNO + sensors + ESP8266), and the network side (sensor node to gateway to IoT server) is simulated in **Cisco Packet Tracer (IoT mode)**.
+**Arduino UNO + ESP8266 · Simulated in Proteus & Cisco Packet Tracer**
 
+![Arduino](https://img.shields.io/badge/Hardware-Arduino%20UNO%20%2B%20ESP8266-00979D?style=flat&logo=arduino&logoColor=white)
+![Proteus](https://img.shields.io/badge/Simulation-Proteus%208.17%2B-00599C?style=flat)
+![Packet Tracer](https://img.shields.io/badge/Network-Cisco%20Packet%20Tracer-1BA0D7?style=flat&logo=cisco&logoColor=white)
+![Status](https://img.shields.io/badge/Project-University%20IoT%20Assignment-success?style=flat)
+
+A university IoT project that monitors water quality parameters (**pH, turbidity, TDS, and chlorine**), evaluates whether the water is safe against standard thresholds, and transmits readings toward an IoT server. The hardware layer is simulated in **Proteus**, while the network path (sensor node → gateway → IoT server) is simulated in **Cisco Packet Tracer (IoT mode)**.
+
+---
+
+## 📌 Table of Contents
+- [Why This Project](#-why-this-project)
+- [Demo & Circuit](#-demo--circuit)
+- [Project Scope](#-project-scope)
+- [Architecture & Pin Map](#-architecture--pin-map)
+- [Firmware & Data Format](#-firmware--data-format)
+- [Network Simulation (Packet Tracer)](#-network-simulation-packet-tracer)
+- [How to Run](#-how-to-run)
+- [Challenges & Solutions](#-challenges--solutions)
+- [Future Work](#-future-work)
+- [Repository Structure](#-repository-structure)
+- [Credits & Author](#-credits--author)
+
+---
+
+## 🌍 Why This Project
+
+Egypt's **Vision 2030** places strong emphasis on sustainable water management and smart infrastructure. Traditionally, water quality is tested manually at fixed intervals and locations. A continuous IoT monitoring node can report anomalies the moment they happen—such as a sudden pH drop in a canal or a turbidity spike at a treatment plant intake—rather than discovering the issue weeks later.
+
+---
+
+## 🎥 Demo & Circuit
+
+### Demo Preview
+<img width="2389" height="1415" alt="Water Quality Monitoring Demo" src="https://github.com/user-attachments/assets/de1263fb-0db6-49af-bb7b-fc04d6b4861b" />
+
+### Proteus Circuit Schematic
 ![Proteus circuit](docs/circuit.png)
-                                               ##Demo 
 
+---
 
+## 📋 Project Scope
 
-<img width="2389" height="1415" alt="demo" src="https://github.com/user-attachments/assets/de1263fb-0db6-49af-bb7b-fc04d6b4861b" />
-
-## Why this project
-
-Egypt's Vision 2030 puts weight on sustainable water management and smart infrastructure. Water quality is usually checked manually, at specific times and places. A continuous sensor node can report problems as they happen (a pH drop in a canal, a turbidity spike at a treatment plant intake) instead of weeks later.
-
-## What is implemented (and what is not)
-
-| Implemented | Not implemented (future work) |
+| Implemented | Not Implemented (Future Work) |
 |---|---|
-| Proteus circuit: Arduino UNO, pH, turbidity, TDS, chlorine inputs, ESP8266 | Real hardware build and sensor calibration |
-| Firmware: reads sensors, converts to units, checks safe limits, prints JSON | Actuators (relay, dosing pump, valve) |
-| Data sent to the ESP8266 over SoftwareSerial | MQTT broker, database, dashboard (planned below) |
-| Packet Tracer network: sensor node to Home Gateway to IoT Server | Modbus-RTU / 4-20 mA (discussed in the report only) |
+| Proteus circuit: Arduino UNO, pH, turbidity, TDS, chlorine inputs, ESP8266 | Physical hardware build and wet-lab sensor calibration |
+| Firmware: sensor sampling, unit conversion, threshold checks, JSON serial output | Actuators (relays, dosing pumps, solenoid valves) |
+| Data transmission from Arduino to ESP8266 over `SoftwareSerial` | MQTT broker, time-series database, and live dashboard |
+| Packet Tracer network: MCU node → Home Gateway → IoT Server | Industrial protocols such as Modbus-RTU / 4–20 mA (covered in report only) |
 
-**Important:** all readings in this repo come from simulation. The turbidity and TDS modules in Proteus do not output a signal, so they are driven by potentiometers (see [Challenges](#challenges-and-how-they-were-solved)).
+> [!IMPORTANT]
+> **Simulation Notice:** All readings in this repository come from simulation. Because the Proteus turbidity and TDS modules do not output active analog signals in simulation, potentiometers are used to drive their inputs (see [Challenges & Solutions](#-challenges--solutions)).
 
-## Architecture
+---
 
+## 🏗️ Architecture & Pin Map
+
+```text
+  pH / Turbidity / TDS / Chlorine
+               │  Analog (A0–A3)
+               ▼
+          Arduino UNO ──── USB Serial (9600 baud) ────▶ JSON line per reading
+               │
+         SoftwareSerial (Pins 10 / 11)
+               │
+               ▼
+            ESP8266 ──── Wi-Fi ────▶ Home Gateway ────▶ IoT Server (Packet Tracer)
 ```
- pH / turbidity / TDS / chlorine
-              |  analog (A0-A3)
-        Arduino UNO ---- USB Serial (9600) ----> JSON line per reading
-              |
-        SoftwareSerial (pins 10/11)
-              |
-          ESP8266 ---- Wi-Fi ----> Home Gateway ----> IoT Server   (Packet Tracer)
-```
 
-### Pin map
+### Pin Mapping
 
-| Signal | Pin | Simulation input |
+| Signal | Arduino Pin | Simulation Input |
 |---|---|---|
-| pH | A0 | pH meter module (controlled by RV1) |
-| Turbidity | A1 | Potentiometer (POT3) |
-| TDS | A2 | Potentiometer (POT2) |
-| Chlorine | A3 | Potentiometer (POT1) |
-| ESP8266 RX / TX | 11 / 10 | SoftwareSerial |
+| **pH** | `A0` | pH meter module (controlled by `RV1`) |
+| **Turbidity** | `A1` | Potentiometer (`POT3`) |
+| **TDS** | `A2` | Potentiometer (`POT2`) |
+| **Chlorine** | `A3` | Potentiometer (`POT1`) |
+| **ESP8266 TX / RX** | `10` / `11` | `SoftwareSerial` (Arduino RX = 10, TX = 11) |
 
-## Firmware
+---
 
-File: [`firmware/water_monitor/water_monitor.ino`](firmware/water_monitor/water_monitor.ino)
+## 💻 Firmware & Data Format
 
-- Averages 10 ADC readings per sensor to reduce noise.
-- Converts voltage to units. **The conversion constants are tuned for the simulation** and live at the top of the file. A real build needs calibration (pH with buffer solutions, TDS with temperature compensation).
-- The pH reading uses a moving average (50 samples at 200 ms, about 10 s), because the pH module's output swings in simulation.
-- Safe limits: pH 6.5 to 8.5, chlorine 0.2 to 2.0 mg/L, turbidity up to 50 NTU, TDS up to 500 ppm. Every violated parameter is reported, not just the first.
+**Sketch:** [`firmware/water_monitor/water_monitor.ino`](firmware/water_monitor/water_monitor.ino)  
+*(The initial version of the sketch is archived in [`firmware/legacy/`](firmware/legacy/) for comparison.)*
 
-Output on USB Serial, one JSON line every 2 seconds:
+### Key Firmware Features
+- **Noise Reduction:** Averages 10 ADC readings per sensor channel.
+- **pH Stabilization:** Applies a 50-sample moving average (sampled every `200 ms`, ~10 seconds window) to smooth out fluctuations from the simulated pH module.
+- **Unit Conversion:** Converts raw ADC values (`0–1023`) to voltage and physical units. Conversion constants are defined at the top of the sketch and tuned for simulation *(a real-world build requires pH buffer calibration and TDS temperature compensation)*.
+- **Full Violation Reporting:** Checks all parameters against safe thresholds and lists **every** violated parameter in the output, not just the first one.
 
+### Safe Water Thresholds
+
+| Parameter | Safe Range | Unit |
+|---|---|---|
+| **pH** | `6.5` – `8.5` | pH |
+| **Chlorine** | `0.2` – `2.0` | mg/L |
+| **Turbidity** | `≤ 50` | NTU |
+| **TDS** | `≤ 500` | ppm |
+
+### Sample Outputs
+
+**1. USB Serial Output** (one JSON line every 2 seconds):
 ```json
 {"ph":7.12,"chlorine":1.20,"turbidity":4.0,"tds":320,"safe":true,"reasons":[]}
 {"ph":6.10,"chlorine":1.50,"turbidity":1.4,"tds":300,"safe":false,"reasons":["pH"]}
 ```
 
-Line sent to the ESP8266 (same format as the original version):
-
-```
+**2. ESP8266 `SoftwareSerial` Payload** (preserving the legacy format):
+```text
 PH=7.12&TURB=4&TDS=320&CHLOR=1.2
 ```
 
-The first version of the sketch is kept in [`firmware/legacy/`](firmware/legacy/) for comparison.
+---
 
-## Packet Tracer (network side)
+## 🌐 Network Simulation (Packet Tracer)
 
-File: `packet-tracer/` (`.pkt`)
+**File:** `packet-tracer/` (`.pkt`)
 
-Packet Tracer's IoT library does not include pH, TDS or turbidity sensors, so generic sensors stand in for them. This simulation proves the **data path**: the MCU registers on the IoT Server over Wi-Fi through the Home Gateway. It is a separate simulation from the Proteus one; data does not flow between them.
+Cisco Packet Tracer's IoT library does not include dedicated pH, TDS, or turbidity sensors, so generic IoT sensors are used as stand-ins. This simulation validates the **end-to-end network path**, showing the MCU registering on the IoT Server over Wi-Fi through the Home Gateway.
 
-Addressing used: MCU1 `192.168.25.100`, Server1 `192.168.25.102`, Home Gateway LAN `192.168.25.1`.
+> [!NOTE]
+> The Proteus and Packet Tracer simulations run independently; live data does not bridge between the two tools.
 
-## How to run
+### IP Addressing Scheme
 
-**Proteus part**
-1. Requires Proteus **8.17 or later** with the **AVR/microcontroller simulation licence**.
+| Device | IP Address | Role |
+|---|---|---|
+| **Home Gateway (LAN)** | `192.168.25.1` | Local Wi-Fi router / default gateway |
+| **MCU1** | `192.168.25.100` | IoT sensor node |
+| **Server1** | `192.168.25.102` | IoT Registration Server |
+
+---
+
+## 🚀 How to Run
+
+### Running the Proteus Simulation
+1. Ensure **Proteus 8.17 or later** is installed with an active **AVR / Microcontroller simulation license**.
 2. Open `proteus/iot_ass1_v2.pdsprj`.
-3. Double-click **UNO1** and set *Program File* to `proteus/water_monitor.ino.hex`.
-4. The pH meter module needs its own hex from the *pH Sensor Library for Proteus* (by The Engineering Projects). It is not included here; download it from the library's page and set it as the Program File of **PH2**.
-5. Press Play. The Virtual Terminal (9600 baud) prints the JSON lines. Use the potentiometers to change turbidity, TDS and chlorine, and RV1 for pH.
+3. Double-click **`UNO1`** and set *Program File* to `proteus/water_monitor.ino.hex`.
+4. Download the hex file from the *pH Sensor Library for Proteus* (by *The Engineering Projects*)—not included in this repo—and assign it as the *Program File* for **`PH2`**.
+5. Press **Play**. The Virtual Terminal (`9600 baud`) will print JSON readings every 2 seconds. Adjust `POT1`–`POT3` for chlorine, TDS, and turbidity, and `RV1` for pH.
 
-**Rebuilding the firmware:** open `firmware/water_monitor/water_monitor.ino` in the Arduino IDE, select *Arduino Uno*, then *Sketch, Export Compiled Binary*, and use the `.hex` without `with_bootloader`.
+### Rebuilding the Firmware (Optional)
+1. Open `firmware/water_monitor/water_monitor.ino` in the **Arduino IDE**.
+2. Select **Board: Arduino Uno**.
+3. Go to **Sketch → Export Compiled Binary**.
+4. Use the generated `.hex` file **without** `with_bootloader` in Proteus.
 
-![Safe reading](docs/terminal-safe.png)
-![Unsafe reading](docs/terminal-unsafe.png)
+### Terminal Output Examples
 
-## Challenges and how they were solved
+| Safe Reading | Unsafe Reading |
+| :---: | :---: |
+| ![Safe reading](docs/terminal-safe.png) | ![Unsafe reading](docs/terminal-unsafe.png) |
 
-| Problem | Solution |
+---
+
+## 🛠️ Challenges & Solutions
+
+| Challenge | Solution |
 |---|---|
-| MCU1 could not reach Server1 in Packet Tracer | The Home Gateway itself was not set to `192.168.25.1`; fixed in its LAN settings |
-| Raw ADC values (0 to 1023) are meaningless to a user | Convert to voltage, then to pH / ppm / NTU in `readSensors()` |
-| pH, TDS and turbidity sensors exist in Proteus but not in Packet Tracer | Split the goals: Proteus for the hardware, Packet Tracer for the network, with generic stand-in sensors |
-| No chlorine sensor in Proteus | Potentiometer on A3 simulates it |
-| Project would not open (needs a newer Proteus) | Opened on Proteus 8.17+ |
-| Compile error: `setup()` and `loop()` redefined | An old `.ino` was in the same sketch folder (Arduino merges all `.ino` files in a folder); moved it out |
-| `Bad or missing Customer Key` for AVR2.DLL | The Proteus install had no AVR simulation licence; used a licensed one |
-| Proteus could not find the hex files after the project was moved | Keep the hex files next to the project and re-select them in each part's *Program File* |
-| Turbidity and TDS modules gave no signal (pins not modelled, constant readings) | Replaced their inputs with potentiometers on A1 and A2 |
-| pH reading swung between about 6 and 8.6 with the control fixed | Added a 10 s moving average in the firmware |
+| `MCU1` could not reach `Server1` in Packet Tracer | Configured the Home Gateway LAN IP to `192.168.25.1` to match the subnet |
+| Raw ADC values (`0–1023`) are not human-readable | Converted ADC counts to voltage, then to pH / ppm / NTU / mg/L inside `readSensors()` |
+| pH, TDS, and turbidity sensors exist in Proteus but not in Packet Tracer | Separated scope: Proteus models the hardware/sensing; Packet Tracer models the network using generic sensors |
+| No chlorine sensor model available in Proteus | Simulated the chlorine sensor output using a potentiometer on `A3` |
+| Project failed to open on older Proteus builds | Upgraded and opened on **Proteus 8.17+** |
+| Compiler error: `setup()` and `loop()` redefined | Removed a duplicate `.ino` file from the same sketch folder (Arduino IDE merges all `.ino` files in one directory) |
+| `Bad or missing Customer Key` error for `AVR2.DLL` | Switched to a Proteus installation with a valid AVR simulation license |
+| Proteus lost `.hex` file paths after moving the project folder | Kept `.hex` files alongside the `.pdsprj` file and re-linked each component's *Program File* |
+| Turbidity and TDS modules produced static/no output in Proteus | Replaced their unmodeled output pins with potentiometers on `A1` and `A2` |
+| pH readings oscillated between `~6.0` and `~8.6` at a fixed input | Implemented a 10-second moving average (50 samples) in firmware |
 
-## Future work
+---
 
-- MQTT pipeline with `docker-compose`: Mosquitto, InfluxDB, Grafana, plus a Python script that reads the Serial JSON and publishes it.
-- GitHub Actions: compile the firmware with `arduino-cli` on every push.
-- Actuators: relay-driven dosing pump or valve for chlorine and TDS correction.
-- Real calibration on hardware.
+## 🔮 Future Work
 
-## Repository structure
+- **Telemetry Pipeline (`docker-compose`):** Mosquitto (MQTT broker) + InfluxDB + Grafana, fed by a Python script reading the Serial JSON stream.
+- **CI/CD:** GitHub Actions workflow using `arduino-cli` to automatically compile and verify the firmware on every push.
+- **Automated Control:** Relay-driven dosing pumps and valves for automatic chlorine and TDS correction.
+- **Hardware Prototyping:** Building and calibrating the physical circuit with real water samples.
 
-```
+---
+
+## 📁 Repository Structure
+
+```text
 water-quality-monitoring/
 ├── README.md
-├── docs/                 screenshots
+├── docs/                 # Circuit schematic and terminal screenshots
 ├── firmware/
-│   ├── water_monitor/    current firmware
-│   └── legacy/           original sketch
-├── proteus/              .pdsprj and compiled .hex
-└── packet-tracer/        .pkt
+│   ├── water_monitor/    # Current Arduino firmware (.ino)
+│   └── legacy/           # Original sketch for comparison
+├── proteus/              # Proteus schematic (.pdsprj) and compiled .hex
+└── packet-tracer/        # Cisco Packet Tracer simulation (.pkt)
 ```
 
-## Credits
+---
 
-- pH meter model: *pH Sensor Library for Proteus*, The Engineering Projects.
-- Course assignment: IoT, New Cairo Technological University.
+## 🙌 Credits & Author
 
-**Author:** [Iman] · [https://www.linkedin.com/in/imansabeq/]
+- **pH Meter Simulation Model:** *pH Sensor Library for Proteus* by *The Engineering Projects*.
+- **Academic Context:** IoT Course Assignment — **New Cairo Technological University**.
+
+**Author:** Iman · [LinkedIn](https://www.linkedin.com/in/imansabeq/)
