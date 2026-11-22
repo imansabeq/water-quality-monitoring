@@ -1,0 +1,11 @@
+build/
+*.elf
+*.eep
+*.bin
+*.with_bootloader.hex
+Project Backups/
+*.workspace
+Last Loaded*
+proteus/pHMeterLibraryTEP.HEX
+Thumbs.db
+.DS_Store
