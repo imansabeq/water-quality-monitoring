@@ -3,6 +3,11 @@
 A university IoT project that monitors water quality (pH, turbidity, TDS, chlorine), decides whether the water is safe, and sends the readings toward a server. The hardware side is simulated in **Proteus** (Arduino UNO + sensors + ESP8266), and the network side (sensor node to gateway to IoT server) is simulated in **Cisco Packet Tracer (IoT mode)**.
 
 ![Proteus circuit](docs/circuit.png)
+                                               ##Demo 
+
+
+
+                                 <img width="2389" height="1415" alt="demo" src="https://github.com/user-attachments/assets/de1263fb-0db6-49af-bb7b-fc04d6b4861b" />
 
 ## Why this project
 
@@ -127,4 +132,4 @@ water-quality-monitoring/
 - pH meter model: *pH Sensor Library for Proteus*, The Engineering Projects.
 - Course assignment: IoT, New Cairo Technological University.
 
-**Author:** [your name] · [LinkedIn]
+**Author:** [Iman] · [https://www.linkedin.com/in/imansabeq/]
