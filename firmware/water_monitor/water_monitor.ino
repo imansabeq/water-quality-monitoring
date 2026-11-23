@@ -1,187 +1,178 @@
-/*
-  Water Quality Monitor (Arduino UNO + ESP8266)
-  Sensors: pH, Turbidity, TDS, Chlorine (chlorine simulated with a potentiometer in Proteus)
+#include <SoftwareSerial.h> 
+#include <math.h> 
 
-  Outputs:
-    - USB Serial (9600): one JSON line per reading, e.g.
-        {"ph":7.12,"chlorine":1.20,"turbidity":4.0,"tds":320,"safe":true,"reasons":[]}
-    - ESP8266 (SoftwareSerial): "PH=7.12&TURB=4&TDS=320&CHLOR=1.2" (same format as the original version)
+// 0 = readable text on the Serial Monitor / Virtual Terminal (default)
+// 1 = one JSON line per reading (for scripts, e.g. the MQTT pipeline)
+#define JSON_OUTPUT 0
 
-  NOTE: the conversion constants below are tuned for the Proteus simulation.
-  For real hardware, recalibrate each sensor (see README -> Calibration).
-*/
+const int ESP_RX_PIN = 11; 
+const int ESP_TX_PIN = 10; 
+SoftwareSerial espSerial(ESP_RX_PIN, ESP_TX_PIN); 
 
-#include <SoftwareSerial.h>
-
-// ---------- Pins ----------
-const uint8_t ESP_RX_PIN    = 11;
-const uint8_t ESP_TX_PIN    = 10;
-const uint8_t PH_PIN        = A0;
-const uint8_t TURBIDITY_PIN = A1;
-const uint8_t TDS_PIN       = A2;
-const uint8_t CHLORINE_PIN  = A3;
-
-SoftwareSerial espSerial(ESP_RX_PIN, ESP_TX_PIN);
-
-// ---------- Settings ----------
-#define HUMAN_READABLE 0                 // 1 = readable text on Serial, 0 = JSON only (for scripts)
-const unsigned long SAMPLE_INTERVAL_MS = 2000;
-const uint8_t ADC_SAMPLES = 10;          // average N readings to reduce noise
-
-// pH smoothing: the pH module's output swings over time, so we keep a moving average
-const unsigned long PH_SAMPLE_INTERVAL_MS = 200;   // how often a pH sample is taken
-const uint8_t PH_AVG_SAMPLES = 50;                 // window = 50 x 200 ms = 10 s
-
-// ---------- ADC ----------
-const float ADC_REF_V = 5.0;
-const float ADC_MAX   = 1023.0;
-
-// ---------- Calibration (Proteus simulation values) ----------
-const float PH_NEUTRAL_V   = 2.5;        // voltage at pH 7
-const float PH_SLOPE       = -3.3;       // pH change per volt
-const float CHLORINE_MAX   = 5.0;        // mg/L at full-scale (5V)
-const float TDS_MAX_PPM    = 1000.0;     // ppm at full-scale (5V)
-
-// Turbidity: voltage -> NTU, points ordered from high voltage (clear) to low voltage (dirty)
-const uint8_t TURB_POINTS = 4;
-const float TURB_V[TURB_POINTS]   = {4.1, 3.4, 2.8, 2.5};
-const float TURB_NTU[TURB_POINTS] = {0.0, 10.0, 100.0, 400.0};
-const float TURB_MAX_NTU = 500.0;        // below the last point
-
-// ---------- Safe limits ----------
-const float PH_MIN = 6.5,       PH_MAX = 8.5;
-const float CHLORINE_MIN = 0.2, CHLORINE_MAX_SAFE = 2.0;
-const float TURBIDITY_MAX = 50.0;
-const float TDS_MAX_SAFE = 500.0;
-
-// Bit flags for unsafe reasons
-const uint8_t BAD_PH = 1, BAD_CHLORINE = 2, BAD_TURBIDITY = 4, BAD_TDS = 8;
+const int PH_PIN = A0;
+const int CHLORINE_PIN = A3; 
+const int TURBIDITY_PIN = A1;
+const int TDS_PIN = A2;
 
 float phValue = 0.0;
 float chlorineValue = 0.0;
 float turbidityValue = 0.0;
 float tdsValue = 0.0;
-unsigned long lastSample = 0;
 
+// How often a full set of readings is printed / sent to the ESP (in milliseconds)
+const unsigned long REPORT_INTERVAL_MS = 2000;
+unsigned long lastReport = 0;
+
+// pH smoothing (moving average): take a pH sample every 200 ms and average the last 50 (about 10 s)
+const unsigned long PH_SAMPLE_INTERVAL_MS = 200;
+const int PH_AVG_SAMPLES = 50;
 float phBuffer[PH_AVG_SAMPLES];
-uint8_t phCount = 0;                     // samples stored so far
-uint8_t phIndex = 0;                     // next slot to overwrite
+int phCount = 0;
+int phIndex = 0;
 unsigned long lastPhSample = 0;
 
 void setup() {
   Serial.begin(9600);
-  espSerial.begin(9600);
-#if HUMAN_READABLE
-  Serial.println(F("Water Monitor - ESP8266 Mode"));
-  Serial.println(F("System Ready."));
-#endif
+  
+  espSerial.begin(9600); 
+  
+  Serial.println("Water Monitor - ESP8266 Mode");
+  Serial.println("Initializing...");
   delay(2000);
+  Serial.println("System Ready.");
 }
 
 void loop() {
-  samplePh();                            // keeps running between reports
-  if (millis() - lastSample < SAMPLE_INTERVAL_MS) return;
-  lastSample = millis();
+  samplePh();                                   // keeps the pH average updating between reports
+
+  if (millis() - lastReport < REPORT_INTERVAL_MS) return;
+  lastReport = millis();
 
   readSensors();
-  uint8_t flags = checkWater();
-  printSerial(flags);
+
+  analyzeAndDebug();
+
   sendDataToESP();
-}
-
-// ---------- Reading ----------
-float readVoltage(uint8_t pin) {
-  long sum = 0;
-  for (uint8_t i = 0; i < ADC_SAMPLES; i++) {
-    sum += analogRead(pin);
-    delay(2);
-  }
-  return (sum / (float)ADC_SAMPLES) * (ADC_REF_V / ADC_MAX);
-}
-
-// Linear interpolation through the turbidity calibration points
-float turbidityFromVoltage(float v) {
-  if (v >= TURB_V[0]) return TURB_NTU[0];
-  for (uint8_t i = 0; i < TURB_POINTS - 1; i++) {
-    if (v >= TURB_V[i + 1]) {
-      float t = (v - TURB_V[i + 1]) / (TURB_V[i] - TURB_V[i + 1]);
-      return TURB_NTU[i + 1] + t * (TURB_NTU[i] - TURB_NTU[i + 1]);
-    }
-  }
-  return TURB_MAX_NTU;
 }
 
 // Take a pH voltage sample every PH_SAMPLE_INTERVAL_MS into a ring buffer
 void samplePh() {
   if (millis() - lastPhSample < PH_SAMPLE_INTERVAL_MS) return;
   lastPhSample = millis();
-  phBuffer[phIndex] = readVoltage(PH_PIN);
+
+  phBuffer[phIndex] = analogRead(PH_PIN) * (5.0 / 1023.0);
   phIndex = (phIndex + 1) % PH_AVG_SAMPLES;
   if (phCount < PH_AVG_SAMPLES) phCount++;
 }
 
 float averagePhVoltage() {
-  if (phCount == 0) return readVoltage(PH_PIN);   // no samples yet
-  float sum = 0;
-  for (uint8_t i = 0; i < phCount; i++) sum += phBuffer[i];
+  if (phCount == 0) return analogRead(PH_PIN) * (5.0 / 1023.0);   // no samples yet
+  float sum = 0.0;
+  for (int i = 0; i < phCount; i++) sum += phBuffer[i];
   return sum / phCount;
 }
 
 void readSensors() {
-  float phV = averagePhVoltage();
-  phValue = 7.0 + (phV - PH_NEUTRAL_V) * PH_SLOPE;
+  float phVoltage = averagePhVoltage();
+  phValue = 7.0 + ((2.5 - phVoltage) * 3.3); 
+  
+  int chlorineRaw = analogRead(CHLORINE_PIN);
+  chlorineValue = map(chlorineRaw, 0, 1023, 0, 500) / 100.0;
 
-  float clV = readVoltage(CHLORINE_PIN);
-  chlorineValue = (clV / ADC_REF_V) * CHLORINE_MAX;
+  int turbidityRaw = analogRead(TURBIDITY_PIN);
+  float turbidityVoltage = turbidityRaw * (5.0 / 1023.0);
+  
+  if (turbidityVoltage >= 4.1) {
+    turbidityValue = 0.0;
+  } else if (turbidityVoltage < 4.1 && turbidityVoltage >= 3.4) {
+    turbidityValue = map((long)(turbidityVoltage * 100), 340, 410, 10, 0); 
+  } else if (turbidityVoltage < 3.4 && turbidityVoltage >= 2.8) {
+    turbidityValue = map((long)(turbidityVoltage * 100), 280, 340, 100, 10);
+  } else if (turbidityVoltage < 2.8 && turbidityVoltage >= 2.5) {
+    turbidityValue = map((long)(turbidityVoltage * 100), 250, 280, 400, 100);
+  } else {
+    turbidityValue = 500.0; 
+  }
+  if (turbidityValue < 0) turbidityValue = 0;
 
-  turbidityValue = turbidityFromVoltage(readVoltage(TURBIDITY_PIN));
-
-  float tdsV = readVoltage(TDS_PIN);
-  tdsValue = (tdsV / ADC_REF_V) * TDS_MAX_PPM;
+  int tdsRaw = analogRead(TDS_PIN);
+  float tdsVoltage = tdsRaw * (5.0 / 1023.0);
+  tdsValue = (tdsVoltage / 5.0) * 1000.0; 
 }
 
-// ---------- Analysis ----------
-uint8_t checkWater() {
-  uint8_t flags = 0;
-  if (phValue < PH_MIN || phValue > PH_MAX) flags |= BAD_PH;
-  if (chlorineValue < CHLORINE_MIN || chlorineValue > CHLORINE_MAX_SAFE) flags |= BAD_CHLORINE;
-  if (turbidityValue > TURBIDITY_MAX) flags |= BAD_TURBIDITY;
-  if (tdsValue > TDS_MAX_SAFE) flags |= BAD_TDS;
-  return flags;
+void addReason(String &reasons, const char* name) {
+  if (reasons.length() > 0) reasons += ", ";
+  reasons += name;
 }
 
-// ---------- Output ----------
-void printReasons(uint8_t flags) {
+void analyzeAndDebug() {
+  bool isWaterSafe = true;
+  String unsafeReason = ""; 
+
+  bool badPh = (phValue < 6.5 || phValue > 8.5);
+  bool badChlorine = (chlorineValue < 0.2 || chlorineValue > 2.0);
+  bool badTurbidity = (turbidityValue > 50);
+  bool badTds = (tdsValue > 500);
+
+  if (badPh) {
+    isWaterSafe = false;
+    addReason(unsafeReason, "pH");
+  }
+  if (badChlorine) {
+    isWaterSafe = false;
+    addReason(unsafeReason, "Chlorine");
+  }
+  if (badTurbidity) {
+    isWaterSafe = false;
+    addReason(unsafeReason, "Turbidity");
+  }
+  if (badTds) {
+    isWaterSafe = false;
+    addReason(unsafeReason, "TDS");
+  }
+
+#if JSON_OUTPUT
+  Serial.print("{\"ph\":");        Serial.print(phValue, 2);
+  Serial.print(",\"chlorine\":");  Serial.print(chlorineValue, 2);
+  Serial.print(",\"turbidity\":"); Serial.print(turbidityValue, 1);
+  Serial.print(",\"tds\":");       Serial.print(tdsValue, 0);
+  Serial.print(",\"safe\":");      Serial.print(isWaterSafe ? "true" : "false");
+  Serial.print(",\"reasons\":[");
   bool first = true;
-  if (flags & BAD_PH)        { Serial.print(F("\"pH\""));        first = false; }
-  if (flags & BAD_CHLORINE)  { if (!first) Serial.print(','); Serial.print(F("\"Chlorine\""));  first = false; }
-  if (flags & BAD_TURBIDITY) { if (!first) Serial.print(','); Serial.print(F("\"Turbidity\"")); first = false; }
-  if (flags & BAD_TDS)       { if (!first) Serial.print(','); Serial.print(F("\"TDS\"")); }
-}
-
-void printSerial(uint8_t flags) {
-#if HUMAN_READABLE
-  Serial.println();
-  Serial.print(F("PH: "));        Serial.println(phValue);
-  Serial.print(F("Chlorine: "));  Serial.println(chlorineValue);
-  Serial.print(F("Turbidity: ")); Serial.println(turbidityValue);
-  Serial.print(F("TDS: "));       Serial.println(tdsValue);
-  Serial.print(F("Safe Water: ")); Serial.println(flags == 0 ? F("SAFE") : F("UNSAFE"));
-  Serial.println(F("----------"));
+  if (badPh)        { Serial.print("\"pH\"");        first = false; }
+  if (badChlorine)  { if (!first) Serial.print(","); Serial.print("\"Chlorine\"");  first = false; }
+  if (badTurbidity) { if (!first) Serial.print(","); Serial.print("\"Turbidity\""); first = false; }
+  if (badTds)       { if (!first) Serial.print(","); Serial.print("\"TDS\""); }
+  Serial.println("]}");
 #else
-  Serial.print(F("{\"ph\":"));        Serial.print(phValue, 2);
-  Serial.print(F(",\"chlorine\":"));  Serial.print(chlorineValue, 2);
-  Serial.print(F(",\"turbidity\":")); Serial.print(turbidityValue, 1);
-  Serial.print(F(",\"tds\":"));       Serial.print(tdsValue, 0);
-  Serial.print(F(",\"safe\":"));      Serial.print(flags == 0 ? F("true") : F("false"));
-  Serial.print(F(",\"reasons\":["));  printReasons(flags);
-  Serial.println(F("]}"));
+  Serial.println();
+  Serial.print("PH: ");
+  Serial.println(phValue);
+  Serial.print("Chlorine: ");
+  Serial.println(chlorineValue);
+  Serial.print("Turbidity: ");
+  Serial.println(turbidityValue);
+  Serial.print("TDS: ");
+  Serial.println(tdsValue);
+  Serial.print("Safe Water: ");
+  Serial.println(isWaterSafe ? "SAFE" : "UNSAFE");
+  Serial.print("Reason: ");
+  Serial.println(unsafeReason);
+  Serial.println("----------");
 #endif
 }
 
 void sendDataToESP() {
-  espSerial.print(F("PH="));      espSerial.print(phValue, 2);
-  espSerial.print(F("&TURB="));   espSerial.print(turbidityValue, 0);
-  espSerial.print(F("&TDS="));    espSerial.print(tdsValue, 0);
-  espSerial.print(F("&CHLOR="));  espSerial.println(chlorineValue, 1);
+  String dataToSend = "";
+  dataToSend += "PH=" + String(phValue, 2);
+  dataToSend += "&TURB=" + String(turbidityValue, 0);
+  dataToSend += "&TDS=" + String(tdsValue, 0);
+  dataToSend += "&CHLOR=" + String(chlorineValue, 1);
+
+  espSerial.println(dataToSend);
+
+#if !JSON_OUTPUT
+  Serial.print("Sending to ESP: ");
+  Serial.println(dataToSend);
+#endif
 }
