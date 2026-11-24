@@ -3,7 +3,7 @@
 
 // 0 = readable text on the Serial Monitor / Virtual Terminal (default)
 // 1 = one JSON line per reading (for scripts, e.g. the MQTT pipeline)
-#define JSON_OUTPUT 0
+#define JSON_OUTPUT 1
 
 const int ESP_RX_PIN = 11; 
 const int ESP_TX_PIN = 10; 
