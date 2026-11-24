@@ -2,8 +2,6 @@
 
 **Embedded Sensing (Arduino UNO) · Dual-Platform Simulation (Proteus & Cisco Packet Tracer) · Containerized Cloud Telemetry (Docker Compose, Mosquitto MQTT, InfluxDB, Grafana) · CI/CD (GitHub Actions) · Edge Tunnel (Cloudflare)**
 
-![Proteus circuit](docs/circuit.png)
-
 ![Hardware](https://img.shields.io/badge/Hardware-Arduino%20UNO%20%2B%20ESP8266-00979D?style=flat&logo=arduino&logoColor=white)
 ![Simulation](https://img.shields.io/badge/Simulation-Proteus%208.17%2B%20%7C%20Packet%20Tracer-00599C?style=flat)
 ![DevOps](https://img.shields.io/badge/DevOps-Docker%20Compose-2496ED?style=flat&logo=docker&logoColor=white)
@@ -52,11 +50,16 @@ Egypt's **Vision 2030** puts weight on sustainable water management and smart in
 ---
 
 ## 🎥 Live Visualizations & Circuit Demos
+<img width="2388" height="1474" alt="demo" src="https://github.com/user-attachments/assets/45a67a52-3425-4248-8148-8ee67e172e73" />
+
+## Circuit
+<img width="1206" height="800" alt="circuit" src="https://github.com/user-attachments/assets/7aa74fb4-a963-44fa-bc70-2af845082a31" />
+
 
 ### 1. Real-Time Grafana Telemetry Dashboard (Safe vs Unsafe)
 | Normal Safe Operating State | Real-Time Violation Alert (Turbidity Spike) |
 | :---: | :---: |
-| ![Dashboard Safe](docs/dashboard-safe.png) | ![Dashboard Unsafe](docs/dashboard-unsafe.png) |
+| ![Dashboard Safe](docs/dashboard_safe.png) | ![Dashboard Unsafe](docs/dashboard_unsafe.png) |
 
 ### 2. Public Edge Tunnel (Cloudflare)
 The localized Docker environment is securely routed to the public internet with end-to-end encryption via Cloudflare Tunnel:
